@@ -1,9 +1,8 @@
 package com.alibaba.rocketmq.validate;
 
-import java.lang.reflect.Method;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import com.alibaba.rocketmq.tools.command.MQAdminStartup;
+import com.alibaba.rocketmq.tools.command.SubCommand;
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -12,13 +11,12 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.stereotype.Service;
 
-import com.alibaba.rocketmq.tools.command.MQAdminStartup;
-import com.alibaba.rocketmq.tools.command.SubCommand;
-import com.google.common.collect.Maps;
+import java.lang.reflect.Method;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
- * 
  * @author yankai913@gmail.com
  * @date 2014-2-25
  */
@@ -27,19 +25,8 @@ public class CmdValidator extends MQAdminStartup implements BeanPostProcessor,
 
     static final Logger logger = LoggerFactory.getLogger(CmdValidator.class);
 
-    private boolean throwDone = true;
-
     private final AtomicBoolean hasChecked = new AtomicBoolean(false);
 
-
-    public boolean isThrowDone() {
-        return throwDone;
-    }
-
-
-    public void setThrowDone(boolean throwDone) {
-        this.throwDone = throwDone;
-    }
 
 
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
@@ -50,6 +37,7 @@ public class CmdValidator extends MQAdminStartup implements BeanPostProcessor,
     Map<Class<? extends SubCommand>, String> cmd2method = Maps.newHashMap();
 
 
+    // 记录已经实现的rocketmq-tools中的命令
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         Class<?> clazz = bean.getClass();
         if (clazz.isAnnotationPresent(Service.class)) {
@@ -61,15 +49,13 @@ public class CmdValidator extends MQAdminStartup implements BeanPostProcessor,
                     String methodName = clazz.getSimpleName() + "." + method.getName();
                     if (method2cmd.get(methodName) == null) {
                         method2cmd.put(methodName, cmdClazz);
-                    }
-                    else {
+                    } else {
                         throw new IllegalStateException(methodName + " = {"
                                 + method2cmd.get(methodName).getName() + "," + cmdClazz.getName() + "}");
                     }
                     if (cmd2method.get(cmdClazz) == null) {
                         cmd2method.put(cmdClazz, methodName);
-                    }
-                    else {
+                    } else {
                         throw new IllegalStateException(cmdClazz + " = {" + cmd2method.get(cmdClazz) + ","
                                 + methodName + "}");
                     }
@@ -80,22 +66,17 @@ public class CmdValidator extends MQAdminStartup implements BeanPostProcessor,
     }
 
 
+    // 记录未实现的rocketmq-tools中的命令
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
         if (hasChecked.compareAndSet(false, true)) {
             for (SubCommand cmd : MQAdminStartup.subCommandList) {
                 if (cmd2method.containsKey(cmd.getClass())) {
                     logger.info("cmdClazz:{}, method:{}", cmd.getClass().getName(),
-                        cmd2method.get(cmd.getClass()));
-                }
-                else {
-                    if (isThrowDone()) {
-                        throw new IllegalStateException("cmdClazz:" + cmd.getClass().getName()
-                                + ", method not found");
-                    }
-                    else {
-                        logger.error("cmdClazz:{}, method not found", cmd.getClass().getName());
-                    }
+                            cmd2method.get(cmd.getClass()));
+                } else {
+                    // 为实现的rocketmq-tools中的命令，不应该出现异常，应该只记录错误。。。
+                    logger.error("cmdClazz:{}, method not found", cmd.getClass().getName());
                 }
             }
         }
